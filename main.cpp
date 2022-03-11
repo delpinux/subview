@@ -95,6 +95,8 @@ class RawView
 int
 main(int argc, char* argv[])
 {
+  using ValueType = size_t;
+
   std::map<double, std::string> time_method_map;
 
   if (argc != 2) {
@@ -115,14 +117,14 @@ main(int argc, char* argv[])
       row_map(i) = row_map(i - 1) + 5;
     }
 
-    Kokkos::View<size_t*> entries("entries", row_map(nb_rows));
+    Kokkos::View<ValueType*> entries("entries", row_map(nb_rows));
     for (size_t i = 0; i < nb_rows; ++i) {
       for (size_t j = row_map(i); j < row_map(i + 1); ++j) {
         entries(j) = i;
       }
     }
 
-    Kokkos::View<size_t*> sums("sums", nb_rows);
+    Kokkos::View<ValueType*> sums("sums", nb_rows);
     for (size_t i = 0; i < sums.extent(0); ++i) {
       sums[i] = 0;
     }
@@ -131,7 +133,7 @@ main(int argc, char* argv[])
     timer.reset();
     for (size_t n = 0; n < nb_loops; ++n) {
       for (size_t i = 0; i < nb_rows; ++i) {
-        size_t sum = 0;
+        ValueType sum = 0;
         for (size_t k = row_map(i); k < row_map(i + 1); ++k) {
           sum += entries(k);
         }
@@ -144,7 +146,7 @@ main(int argc, char* argv[])
     for (size_t n = 0; n < nb_loops; ++n) {
       for (size_t i = 0; i < nb_rows; ++i) {
         RawView view(entries, row_map(i), row_map(i + 1));
-        size_t sum = 0;
+        ValueType sum = 0;
         for (size_t k = 0; k < view.size(); ++k) {
           sum += entries(k);
         }
@@ -156,8 +158,8 @@ main(int argc, char* argv[])
     timer.reset();
     for (size_t n = 0; n < nb_loops; ++n) {
       for (size_t i = 0; i < nb_rows; ++i) {
-        Kokkos::View<size_t*> sub_view = Kokkos::subview(entries, std::make_pair(row_map(i), row_map(i + 1)));
-        size_t sum                     = 0;
+        auto sub_view = Kokkos::subview(entries, std::make_pair(row_map(i), row_map(i + 1)));
+        ValueType sum = 0;
         for (size_t k = 0; k < sub_view.extent(0); ++k) {
           sum += sub_view(k);
         }
@@ -169,8 +171,8 @@ main(int argc, char* argv[])
     timer.reset();
     for (size_t n = 0; n < nb_loops; ++n) {
       for (size_t i = 0; i < nb_rows; ++i) {
-        Kokkos::View<size_t*> view(entries, std::make_pair(row_map(i), row_map(i + 1)));
-        size_t sum = 0;
+        Kokkos::View<ValueType*> view(entries, std::make_pair(row_map(i), row_map(i + 1)));
+        ValueType sum = 0;
         for (size_t k = 0; k < view.extent(0); ++k) {
           sum += view(k);
         }
@@ -179,7 +181,7 @@ main(int argc, char* argv[])
     }
     time_method_map[timer.seconds()] = "Kokkos::View";
 
-    SharedArray<size_t> shared_array{entries.extent(0)};
+    SharedArray<ValueType> shared_array{entries.extent(0)};
     for (size_t i = 0; i < shared_array.size(); ++i) {
       shared_array(i) = entries(i);
     }
@@ -187,8 +189,8 @@ main(int argc, char* argv[])
     timer.reset();
     for (size_t n = 0; n < nb_loops; ++n) {
       for (size_t i = 0; i < nb_rows; ++i) {
-        auto&& view = subView(shared_array, row_map(i), row_map(i + 1));
-        size_t sum  = 0;
+        auto&& view   = subView(shared_array, row_map(i), row_map(i + 1));
+        ValueType sum = 0;
         for (size_t k = 0; k < view.size(); ++k) {
           sum += view(k);
         }
@@ -201,7 +203,7 @@ main(int argc, char* argv[])
     for (size_t n = 0; n < nb_loops; ++n) {
       for (size_t i = 0; i < nb_rows; ++i) {
         RawView view(shared_array, row_map(i), row_map(i + 1));
-        size_t sum = 0;
+        ValueType sum = 0;
         for (size_t k = 0; k < view.size(); ++k) {
           sum += view(k);
         }
