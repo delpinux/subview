@@ -84,7 +84,10 @@ class RawView
     return m_values[i];
   }
 
-  RawView(const Kokkos::View<T*>& view, size_t begin, size_t end) : m_values{&(view(begin))}, m_size(end - begin) {}
+  RawView(const Kokkos::View<T*>& view, size_t begin, size_t end)   //
+    : m_values{&(view(begin))}, m_size(end - begin)
+  {}
+
   RawView(SharedArray<T>& shared_array, size_t begin, size_t end)
     : m_values{&(shared_array(begin))}, m_size(end - begin)
   {}
@@ -92,11 +95,22 @@ class RawView
   ~RawView() = default;
 };
 
+using ValueType = size_t;
+
+bool
+checkSum(const Kokkos::View<ValueType*>& sum, const size_t row_size)
+{
+  bool is_correct = true;
+  for (size_t i = 0; i < sum.extent(0); ++i) {
+    const double difference = sum(i) - row_size * i;
+    is_correct &= (std::abs(difference) < 1E-8);
+  }
+  return is_correct;
+}
+
 int
 main(int argc, char* argv[])
 {
-  using ValueType = size_t;
-
   std::map<double, std::string> time_method_map;
 
   if (argc != 2) {
@@ -110,7 +124,9 @@ main(int argc, char* argv[])
   Kokkos::initialize(argc, argv);
 
   {
-    const size_t nb_rows = 100000;
+    const size_t nb_rows          = 100000;
+    const size_t nb_value_per_row = 5;
+
     Kokkos::View<size_t*> row_map("row_map", nb_rows + 1);
     row_map(0) = 0;
     for (size_t i = 1; i < row_map.extent(0); ++i) {
@@ -125,9 +141,8 @@ main(int argc, char* argv[])
     }
 
     Kokkos::View<ValueType*> sums("sums", nb_rows);
-    for (size_t i = 0; i < sums.extent(0); ++i) {
-      sums[i] = 0;
-    }
+
+    Kokkos::deep_copy(sums, 0);
     Kokkos::Timer timer;
 
     timer.reset();
@@ -141,20 +156,32 @@ main(int argc, char* argv[])
       }
     }
     time_method_map[timer.seconds()] = "Kokkos/Direct";
+    if (checkSum(sums, nb_value_per_row)) {
+      std::cout << "Kokkos/Direct ok\n";
+    } else {
+      std::cout << "Kokkos/Direct failed\n";
+    }
 
+    Kokkos::deep_copy(sums, 0);
     timer.reset();
     for (size_t n = 0; n < nb_loops; ++n) {
       for (size_t i = 0; i < nb_rows; ++i) {
         RawView view(entries, row_map(i), row_map(i + 1));
         ValueType sum = 0;
         for (size_t k = 0; k < view.size(); ++k) {
-          sum += entries(k);
+          sum += view(k);
         }
         sums(i) = sum;
       }
     }
     time_method_map[timer.seconds()] = "Kokkos|RawView";
+    if (checkSum(sums, nb_value_per_row)) {
+      std::cout << "Kokkos|RawView ok\n";
+    } else {
+      std::cout << "Kokkos|RawView failed\n";
+    }
 
+    Kokkos::deep_copy(sums, 0);
     timer.reset();
     for (size_t n = 0; n < nb_loops; ++n) {
       for (size_t i = 0; i < nb_rows; ++i) {
@@ -167,7 +194,13 @@ main(int argc, char* argv[])
       }
     }
     time_method_map[timer.seconds()] = "Kokkos::subView";
+    if (checkSum(sums, nb_value_per_row)) {
+      std::cout << "Kokkos::subView ok\n";
+    } else {
+      std::cout << "Kokkos::subView failed\n";
+    }
 
+    Kokkos::deep_copy(sums, 0);
     timer.reset();
     for (size_t n = 0; n < nb_loops; ++n) {
       for (size_t i = 0; i < nb_rows; ++i) {
@@ -180,12 +213,18 @@ main(int argc, char* argv[])
       }
     }
     time_method_map[timer.seconds()] = "Kokkos::View";
+    if (checkSum(sums, nb_value_per_row)) {
+      std::cout << "Kokkos::View ok\n";
+    } else {
+      std::cout << "Kokkos::View failed\n";
+    }
 
     SharedArray<ValueType> shared_array{entries.extent(0)};
     for (size_t i = 0; i < shared_array.size(); ++i) {
       shared_array(i) = entries(i);
     }
 
+    Kokkos::deep_copy(sums, 0);
     timer.reset();
     for (size_t n = 0; n < nb_loops; ++n) {
       for (size_t i = 0; i < nb_rows; ++i) {
@@ -198,7 +237,13 @@ main(int argc, char* argv[])
       }
     }
     time_method_map[timer.seconds()] = "SharedArrayView";
+    if (checkSum(sums, nb_value_per_row)) {
+      std::cout << "SharedArrayView ok\n";
+    } else {
+      std::cout << "SharedArrayView failed\n";
+    }
 
+    Kokkos::deep_copy(sums, 0);
     timer.reset();
     for (size_t n = 0; n < nb_loops; ++n) {
       for (size_t i = 0; i < nb_rows; ++i) {
@@ -211,6 +256,11 @@ main(int argc, char* argv[])
       }
     }
     time_method_map[timer.seconds()] = "SharedArray|RawView";
+    if (checkSum(sums, nb_value_per_row)) {
+      std::cout << "SharedArray|RawView ok\n";
+    } else {
+      std::cout << "SharedArray|RawView failed\n";
+    }
 
     std::cout.precision(15);
     for (const auto& [time, name] : time_method_map) {
