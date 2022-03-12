@@ -113,24 +113,23 @@ main(int argc, char* argv[])
 {
   std::map<double, std::string> time_method_map;
 
-  if (argc != 2) {
-    std::cerr << "usage: " << argv[0] << " [nb-loops]\n";
-    return 1;
-  }
+  std::cout << "usage: " << argv[0] << " [nb-loops: default 1000] [nb_value_per_row: default 5]\n";
 
-  const size_t nb_loops = atoi(argv[1]);
+  const size_t nb_loops = argc > 1 ? atoi(argv[1]) : 1000;
+  const size_t nb_value_per_row = argc > 2 ? atoi(argv[2]) : 5;
+
   std::cout << "processing " << nb_loops << " loops\n";
+  std::cout << "using nb_value_per_row = " << nb_value_per_row << "\n";
 
   Kokkos::initialize(argc, argv);
 
   {
     const size_t nb_rows          = 100000;
-    const size_t nb_value_per_row = 5;
 
     Kokkos::View<size_t*> row_map("row_map", nb_rows + 1);
     row_map(0) = 0;
     for (size_t i = 1; i < row_map.extent(0); ++i) {
-      row_map(i) = row_map(i - 1) + 5;
+      row_map(i) = row_map(i - 1) + nb_value_per_row;
     }
 
     Kokkos::View<ValueType*> entries("entries", row_map(nb_rows));
